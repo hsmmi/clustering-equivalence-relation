@@ -64,7 +64,7 @@ def string_to_dataframe(string):
 
 def read_dataset_to_X_and_y(
         file, range_feature=None, range_label=None, normalization=None,
-        min_value=None, max_value=None, add_x0=False):
+        min_value=None, max_value=None, add_x0=False, shuffle=False):
     """
     Read the attribute(range_atr) that you want and put X0 = 1 and thoes
     attribute of all samples in X and all samples lable in y
@@ -78,6 +78,9 @@ def read_dataset_to_X_and_y(
     col_name, data = read_dataset_with_pandas(file)
     number_of_attribute = len(col_name)
     data = data.to_numpy()
+
+    if shuffle is True:
+        np.random.shuffle(data)
 
     if(range_feature is None):
         range_feature = (0, number_of_attribute-1)
