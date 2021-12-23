@@ -64,10 +64,11 @@ def string_to_dataframe(string):
 
 def read_dataset_to_X_and_y(
         file, range_feature=None, range_label=None, normalization=None,
-        min_value=None, max_value=None, add_x0=False, shuffle=False):
+        min_value=None, max_value=None, add_x0=False, shuffle=False,
+        about_nan=None):
     """
     Read the attribute(range_atr) that you want and put X0 = 1 and thoes
-    attribute of all samples in X and all samples lable in y
+    attribute of all samples in X and all samples label in y
     normalization:
     .   by default is None and can be "z_score", "scaling", "clipping"
         or "log_scaling"
@@ -76,10 +77,13 @@ def read_dataset_to_X_and_y(
     """
     import numpy as np
     col_name, data = read_dataset_with_pandas(file)
+    if(about_nan == 'delete'):
+        data.dropna(inplace=True)
+
     number_of_attribute = len(col_name)
     data = data.to_numpy()
 
-    if shuffle is True:
+    if(shuffle is True):
         np.random.shuffle(data)
 
     if(range_feature is None):
@@ -89,7 +93,7 @@ def read_dataset_to_X_and_y(
 
     feature = np.array(list(map(
         lambda x: x[range_feature[0]:range_feature[1]], data)))
-    lable = np.array(list(map(
+    label = np.array(list(map(
         lambda x: x[range_label[0]:range_label[1]], data)))
 
     if(normalization is not None):
@@ -107,4 +111,17 @@ def read_dataset_to_X_and_y(
                 '"logScaling"')
             return
 
-    return feature, lable
+    if(about_nan == 'class_mean'):
+        feature = feature.astype(float)
+        diffrent_label = np.unique(label)
+        number_of_feature = feature.shape[1]
+        number_of_sample = feature.shape[0]
+        for a_label in diffrent_label:
+            class_label = feature[(label == a_label).flatten()]
+            for a_feature in range(number_of_feature):
+                mean_feature_label = np.nanmean(class_label[:, a_feature])
+                for a_sample in range(number_of_sample):
+                    if np.isnan(feature[a_sample, a_feature]):
+                        feature[a_sample, a_feature] = mean_feature_label
+
+    return feature, label
