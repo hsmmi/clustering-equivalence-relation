@@ -22,7 +22,7 @@ class UniSet():
         self.equivalence_relation = None
 
 
-uni_total = UniSet('dataset/hcvdat0.csv', (4, 14), (1, 2))
+uni_total = UniSet('dataset/hcvdat0.csv', (4, 14), (1, 2), normalization=True)
 
 
 def split_train_test(universe: UniSet, train_size: float) -> list[UniSet]:
@@ -42,24 +42,18 @@ def split_train_test(universe: UniSet, train_size: float) -> list[UniSet]:
 uni_train, uni_test = split_train_test(uni_total, 0.8)
 
 
-def similarity(sample1: np.ndarray, sample2: np.ndarray) -> float:
-    score = 0.0
-    number_of_feature = sample1.shape[0]
-    for feature in range(number_of_feature):
-        score += min(
-            (sample1[feature] / sample2[feature]),
-            (sample2[feature] / sample1[feature]))
-    score /= number_of_feature
-    return score
+def distance(sample1: np.ndarray, sample2: np.ndarray) -> float:
+    return np.linalg.norm(sample1-sample2)
 
 
 def find_relation(universal: UniSet) -> np.ndarray:
-    return np.array(
+    dis = np.array(
         list(map(lambda x: list(map(
-            lambda y: similarity(
+            lambda y: distance(
                 universal.universal[x], universal.universal[y]),
             range(universal.size_of_universal))),
             range(universal.size_of_universal))))
+    return 1 - dis / np.max(dis)
 
 
 uni_train.relation = find_relation(uni_train)
