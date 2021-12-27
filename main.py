@@ -1,5 +1,5 @@
-from clustering_all_in_class import Relation
+from clustering import UniSet
 
-rel = Relation('dataset/hcvdat0.csv', (4, 14), (1, 2))
+rel = UniSet('dataset/hcvdat0.csv', (4, 14), (1, 2))
 rel.relation_runner()
 print('hi')

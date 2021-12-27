@@ -1,28 +1,29 @@
 import numpy as np
-from my_io import read_dataset_to_X_and_y
-from normalization import zero_mean_unit_variance
+from my_io import read_dataset_to_X_and_y, read_dataset_with_pandas
 from copy import deepcopy
+import matplotlib.pyplot as plt
 
 
 class UniSet():
-    def __init__(self, file, range_feature, range_label, normalization=False):
+    def __init__(self, file, range_feature, range_label,
+                 normalization=None, shuffle=False, about_nan='class_mean'):
         np.random.seed(1)
         sample, label = read_dataset_to_X_and_y(
-            file, range_feature, range_label, shuffle=False,
-            about_nan='class_mean')
+            file, range_feature, range_label, normalization, shuffle=shuffle,
+            about_nan=about_nan)
         self.number_of_feature = sample.shape[1]
         self.size_of_universal = sample.shape[0]
         self.universal = sample.astype(float)
         self.label = label
         self.diffrent_label = np.unique(label)
         self.number_of_diffrent_label = self.diffrent_label.shape[0]
-        if normalization is True:
-            self.universal = zero_mean_unit_variance(self.universal)
         self.relation = None
         self.equivalence_relation = None
 
 
-uni_total = UniSet('dataset/hcvdat0.csv', (4, 14), (1, 2), normalization=True)
+uni_total = UniSet(
+    'dataset/hcvdat0.csv', (2, 14), (1, 2),
+    normalization='z_score', shuffle=True, about_nan='class_mean')
 
 
 def split_train_test(universe: UniSet, train_size: float) -> list[UniSet]:
@@ -32,10 +33,15 @@ def split_train_test(universe: UniSet, train_size: float) -> list[UniSet]:
         int(universe.size_of_universal*train_size)
     train.universal = \
         universe.universal[0:train.size_of_universal]
+    train.label = \
+        universe.label[0:train.size_of_universal]
     test.size_of_universal = (
         universe.size_of_universal - train.size_of_universal)
     test.universal = \
         universe.universal[train.size_of_universal:]
+    test.label = \
+        universe.label[train.size_of_universal:]
+
     return train, test
 
 
@@ -92,7 +98,10 @@ def make_transitive(relation: np.ndarray) -> np.ndarray:
     return Rp
 
 
-uni_train.equivalence_relation = make_transitive(uni_train.relation)
+# uni_train.equivalence_relation = make_transitive(uni_train.relation)
+ER = read_dataset_with_pandas('dataset/ER.train.csv')[1]
+ER = ER.to_numpy()[:, 1:]
+uni_train.equivalence_relation = ER
 
 
 def is_reflexive(relation: np.ndarray) -> bool:
@@ -100,7 +109,7 @@ def is_reflexive(relation: np.ndarray) -> bool:
 
 
 def is_symmetric(relation: np.ndarray) -> bool:
-    return (relation == relation.T).all()
+    return np.array_equal(relation, relation.T)
 
 
 def is_transitive(relation: np.ndarray) -> bool:
@@ -114,7 +123,7 @@ def is_equivalece(relation: np.ndarray) -> bool:
         is_transitive(relation)
 
 
-print(is_equivalece(uni_train.equivalence_relation))
+# print(is_equivalece(uni_train.equivalence_relation))
 
 
 def find_similarity_class(
@@ -127,13 +136,60 @@ def find_similarity_class(
     return np.array(similarity_class)
 
 
-def find_cluster(relation: np.ndarray, alpha: float) -> list:
+def find_cluster(relation: np.ndarray, alpha: float, label=True):
     size_of_universal = relation.shape[0]
     classes = []
-    mark = np.zeros(size_of_universal)
+    predicted_label = np.full((size_of_universal, 1), -1.0)
+    number_of_class = 0.0
     for sample in range(size_of_universal):
-        if(mark[sample] == 0):
+        if(predicted_label[sample] == -1):
             new_class = find_similarity_class(relation, sample, alpha)
-            mark[new_class] = 1
+            predicted_label[new_class] = number_of_class
+            number_of_class += 1
             classes.append(new_class)
-    return classes
+    number_of_class = int(number_of_class)
+    if(label is True):
+        return predicted_label, number_of_class
+    return classes, number_of_class
+
+
+def evaluate(gold_label: np.ndarray, predict_label: np.ndarray,
+             method: str = 'f1-score') -> float:
+    diffrent_label_in_gold_label = np.unique(gold_label)
+    diffrent_label_in_predict_label = np.unique(predict_label)
+    conf_mat = np.array(
+        list(map(lambda k: list(map(
+            lambda s: sum((predict_label == k)*(gold_label == s))[0],
+            diffrent_label_in_gold_label)),
+            diffrent_label_in_predict_label)))
+    precision = np.sum(np.max(conf_mat, axis=1)) / np.sum(conf_mat)
+    recall = np.sum(np.max(conf_mat, axis=0)) / np.sum(conf_mat)
+    if(method == 'precision'):
+        return precision
+    if(method == 'recall'):
+        return recall
+    if(method == 'f1-score'):
+        return 2 * ((precision*recall)/(precision+recall))
+
+
+def find_best_alpha_cut(universal: UniSet, plotter: bool = False) -> float:
+    alpha_cut = []
+    accuracy = []
+    last_point = -1.0
+    for alpha in np.unique(ER):
+        if(alpha - last_point >= 0.001):
+            alpha_cut.append(alpha)
+            accuracy.append(evaluate(
+                universal.label,
+                find_cluster(universal.equivalence_relation, alpha, True)[0]))
+            last_point = alpha
+    if(plotter is True):
+        plt.plot(alpha_cut, accuracy)
+        plt.show()
+
+
+best_alpha_cut, best_alpha_cut_accuracy = find_best_alpha_cut(uni_train)
+
+predicted_label_test = find_cluster(
+    uni_test.equivalence_relation, best_alpha_cut)
+test_accuracy = evaluate(uni_test.label, predicted_label_test)
